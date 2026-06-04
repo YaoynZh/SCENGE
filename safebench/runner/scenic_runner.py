@@ -98,9 +98,15 @@ class ScenicRunner(BaseRunner):
         env_keys = sorted(k for k in records[0] if k.startswith("env_actor_"))
         actor_sources = [("ego", "ego"), ("adv", "adv_agent_0")]
         actor_sources.extend((key, key) for key in env_keys)
-        if "adv_agent_0" not in records[0] or not env_keys:
+        if "adv_agent_0" not in records[0]:
             self.logger.log(
-                f">> Skip trajectory dump for {stem}: missing adv/env actors",
+                f">> Skip trajectory dump for {stem}: missing adv actor",
+                color="yellow",
+            )
+            return
+        if not env_keys:
+            self.logger.log(
+                f">> Skip trajectory dump for {stem}: no env actors to perturb",
                 color="yellow",
             )
             return
@@ -362,6 +368,7 @@ class ScenicRunner(BaseRunner):
         scenic_dir = os.path.join(
             self.scenario_config["scenic_dir"], f"scenario_{scenario_id}"
         )
+        os.makedirs(scenic_dir, exist_ok=True)
         out_path = os.path.join(scenic_dir, f"{os.path.basename(scenic_dir)}.json")
         with open(out_path, "w") as fh:
             json.dump(self.scene_map, fh, indent=4)

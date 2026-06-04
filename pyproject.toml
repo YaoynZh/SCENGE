@@ -41,10 +41,13 @@ msgen = [
     "transformers>=4.46.3",
     "llama-index-core>=0.11.23",
     "llama-index-llms-huggingface>=0.3.5",
+    "llama-index-llms-openai>=0.2.0",
+    "llama-index-embeddings-openai>=0.2.0",
     "llama-index-embeddings-huggingface>=0.3.1",
     "llama-index-readers-file>=0.3.0",
     "bitsandbytes>=0.45.5",
     "accelerate>=1.0.1",
+    "openai>=1.0.0",
 ]
 dev = [
     "black>=24.8.0",

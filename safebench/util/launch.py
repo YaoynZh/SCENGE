@@ -17,11 +17,13 @@ from typing import Any, Dict, Optional
 
 import torch
 
+from safebench.util.carla_setup import ensure_carla_pythonpath
 from safebench.util.run_util import load_config
 from safebench.util.torch_util import set_seed, set_torch_variable
 
 
 REPO_ROOT = osp.abspath(osp.dirname(osp.dirname(osp.dirname(osp.realpath(__file__)))))
+ensure_carla_pythonpath(REPO_ROOT)
 
 
 @dataclass

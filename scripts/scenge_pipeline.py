@@ -44,15 +44,27 @@ def step_msgen(args: argparse.Namespace) -> None:
         os.path.join(REPO_ROOT, "safebench/scenge/msgen/meta_scenario_generation.py"),
         "--scenario_ids",
         str(args.scenario_id),
+        "--llm-backend",
+        args.llm_backend,
         "--llm_name",
         args.llm_name,
-        "--embed_name",
-        args.embed_name,
         "--scenario-route-id",
         str(args.scenario_route_id),
         "--max-repair-rounds",
         str(args.max_repair_rounds),
     )
+    if args.embed_backend:
+        cmd.extend(["--embed-backend", args.embed_backend])
+    if args.embed_name:
+        cmd.extend(["--embed_name", args.embed_name])
+    if args.openai_api_key:
+        cmd.extend(["--openai-api-key", args.openai_api_key])
+    if args.openai_base_url:
+        cmd.extend(["--openai-base-url", args.openai_base_url])
+    if args.openai_temperature is not None:
+        cmd.extend(["--openai-temperature", str(args.openai_temperature)])
+    if args.openai_max_tokens is not None:
+        cmd.extend(["--openai-max-tokens", str(args.openai_max_tokens)])
     if args.route_pickle:
         cmd.extend(["--route-pickle", args.route_pickle])
     if args.no_scenic_sample:
@@ -132,10 +144,41 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     # msgen knobs
-    parser.add_argument("--llm_name", type=str, default="Qwen/QwQ-32B")
     parser.add_argument(
-        "--embed_name", type=str, default="BAAI/bge-large-en-v1.5"
+        "--llm_backend",
+        type=str,
+        choices=("huggingface", "hf", "openai"),
+        default="huggingface",
+        help="msgen LLM provider: local HuggingFace or OpenAI-compatible API.",
     )
+    parser.add_argument("--llm_name", type=str, default="gpt-4o-mini")
+    parser.add_argument(
+        "--embed_backend",
+        type=str,
+        choices=("huggingface", "hf", "openai"),
+        default=None,
+        help="RAG embedding provider. Defaults to openai when --llm_backend=openai.",
+    )
+    parser.add_argument(
+        "--embed_name",
+        type=str,
+        default=None,
+        help="Embedding model id. OpenAI default: text-embedding-3-small.",
+    )
+    parser.add_argument(
+        "--openai_api_key",
+        type=str,
+        default=None,
+        help="OpenAI API key (fallback: env OPENAI_API_KEY).",
+    )
+    parser.add_argument(
+        "--openai_base_url",
+        type=str,
+        default=None,
+        help="OpenAI-compatible base URL (fallback: env OPENAI_BASE_URL).",
+    )
+    parser.add_argument("--openai_temperature", type=float, default=0.1)
+    parser.add_argument("--openai_max_tokens", type=int, default=None)
     parser.add_argument("--scenario_route_id", type=int, default=1)
     parser.add_argument("--route_pickle", type=str, default=None)
     parser.add_argument("--max_repair_rounds", type=int, default=4)

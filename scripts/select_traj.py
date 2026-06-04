@@ -10,6 +10,8 @@ For each ``traj_dir/<scene>.json`` under ``--folder``:
    ``{folder}/perturbed_traj/perturbed_<scene>/<actor>.csv``.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os

@@ -37,6 +37,9 @@ safebench/
   runner/                          # BaseRunner + CarlaRunner + ScenicRunner
   scenge/                          # ScenGE-only logic
     msgen/                         # LLM + RAG → Scenic scripts
+      knowledge_docs/              # phase-1 RAG: base scenarios, patterns
+      scenic_docs/                 # phase-2 RAG: Scenic snippets
+      prompts/                     # phase-1/2 LLM prompt templates
     threat/{attention, pgd, losses, io}.py
   util/{logger, run_util, metric_util, launch, ...}.py
 scripts/
