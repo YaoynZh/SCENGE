@@ -1,0 +1,32 @@
+You are generating a safety-critical adversarial driving scenario for CARLA + Safebench.
+
+Base scenario type: {base_scenario}
+
+Use the retrieved knowledge about base scenarios, adversarial patterns, and output format.
+
+Task:
+1. Invent ONE novel but realistic safety-critical scenario under this base type.
+2. Decompose it into four structured fields.
+
+Output rules (strict):
+- First think briefly inside <think>...</think>.
+- Then output EXACTLY one Markdown code block labeled Text (not json, not yaml).
+- Inside the Text block, write four lines with this exact key format (one field per line):
+  Description: <one English sentence describing ego + adversarial interaction>
+  AdvType: <pedestrian | car | cyclist | motorcycle | bus | truck>
+  AdvPos: <relative position to ego, e.g. right front, left front, rear, oncoming left>
+  AdvBehavior: <short phrase for the adversarial maneuver>
+
+Constraints:
+- Description must match base scenario "{base_scenario}".
+- AdvBehavior should be safety-critical (sudden stop, cut-in, red-light run, fake crossing, abrupt brake, etc.).
+- Do NOT output Scenic code in this step.
+- Do NOT add extra keys or bullet lists.
+
+Example Text block:
+```Text
+Description: The ego vehicle drives straight when a pedestrian sprints from behind a bus stop on the right and stops directly in the ego lane.
+AdvType: pedestrian
+AdvPos: right front
+AdvBehavior: Sprints from concealment and freezes in the ego path
+```

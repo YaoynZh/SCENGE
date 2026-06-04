@@ -1,0 +1,27 @@
+ScenGE / Safebench base scenario taxonomy (scenario_id 1-8):
+
+1. Straight Obstacle
+   Ego drives on a straight road. Adversarial agents appear from roadside, occlusions, or adjacent lanes and block or cut in front of the ego.
+
+2. Turning Obstacle
+   Ego performs a turn (left/right) at an intersection. Adversarial agents cross, brake abruptly, or feint crossing to confuse the turning ego.
+
+3. Lane Changing
+   Ego initiates or completes a lane change. Adversarial vehicles accelerate, brake, or occupy the target gap.
+
+4. Vehicle Passing
+   Ego passes a slow or parked vehicle. Adversarial agents emerge from blind spots or oncoming traffic.
+
+5. Red-light Running
+   Ego crosses an intersection with traffic lights. Adversarial vehicle runs a red light or violates signal priority.
+
+6. Unprotected Left-turn
+   Ego turns left without protected signal. Oncoming or crossing traffic creates conflict.
+
+7. Right-turn
+   Ego turns right at an intersection. Pedestrians, cyclists, or crossing vehicles create conflict on the crosswalk or merge lane.
+
+8. Crossing Negotiation
+   Ego and adversarial agents negotiate a complex crossing (multi-lane intersection, ambiguous right-of-way).
+
+When generating scenarios, keep geometry consistent with the base type and prefer one primary adversarial actor (AdvAgent).

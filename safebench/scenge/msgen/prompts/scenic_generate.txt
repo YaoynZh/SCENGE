@@ -1,0 +1,26 @@
+You are writing a complete Safebench-compatible Scenic 2.x script for CARLA simulation.
+
+Scenario semantics (do not change meaning):
+- Description: {Description}
+- AdvType: {AdvType}
+- AdvPos: {AdvPos}
+- AdvBehavior: {AdvBehavior}
+
+Use retrieved Scenic snippets for behaviors, spawn geometry, OPT parameters, and Safebench boilerplate.
+
+Hard requirements (Safebench / ScenGE):
+1. Read injected globals: Town = globalParameters.town; EgoSpawnPt = globalParameters.spawnPt; yaw = globalParameters.yaw; egoTrajectory = PolylineRegion(globalParameters.waypoints). Use lanePts = globalParameters.lanePts only when turning / intersection logic needs it.
+2. param map = localPath(f'../maps/{{Town}}.xodr'); param carla_map = Town; model scenic.simulators.carla.model
+3. EGO_MODEL = "vehicle.lincoln.mkz_2017"
+4. ego = Car at EgoSpawnPt, with heading yaw, with regionContainedIn None, with blueprint EGO_MODEL
+5. Name the adversarial actor AdvAgent and the adversarial behavior AdvBehavior().
+6. Every tunable hyper-parameter must be param OPT_xxx = Range(...) and referenced as globalParameters.OPT_xxx inside logic.
+7. Prefer CrossingBehavior, FollowTrajectoryBehavior, SetWalkingSpeedAction, SetBrakeAction, SetSpeedAction, SetThrottleAction from the CARLA Scenic model.
+8. Do NOT include the four header comment lines (# Description / # AdvType / ...); the pipeline adds them.
+9. Output runnable Scenic body only (no markdown explanation outside the code block).
+10. NEVER use Vector(x, y, z) or `EgoSpawnPt + Vector(...)`. Use OrientedPoint / left of / right of / @ offset patterns from retrieved snippets.
+11. AdvAgent MUST include `with behavior AdvBehavior()`.
+
+Output rules (strict):
+- Think briefly in <think>...</think>
+- Then output exactly one ```Scenic ... ``` block containing the full script body.

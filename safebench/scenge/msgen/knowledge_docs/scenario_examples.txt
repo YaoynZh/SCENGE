@@ -1,0 +1,35 @@
+Reference scenario descriptions per base type (from Safebench scenic_data):
+
+Straight Obstacle (scenario 1):
+- Pedestrian crosses from right front and stops in ego lane.
+- Pedestrian hides behind bus stop on right, sprints out and stops.
+- Pedestrian appears from left driveway, walks diagonally.
+- Pedestrian emerges from behind parked vehicle and stops abruptly.
+- Pedestrian runs from roadside occlusion into ego trajectory.
+
+Turning Obstacle (scenario 2):
+- Motorcyclist on right front feints crossing, brakes at road edge during ego left turn.
+- Pedestrian crosses during ego turn and stops in path.
+
+Lane Changing (scenario 3):
+- Adjacent vehicle accelerates into target lane gap.
+- Vehicle in blind spot refuses to yield during ego lane change.
+
+Vehicle Passing (scenario 4):
+- Oncoming vehicle turns into ego path while ego passes parked car.
+- Pedestrian crosses behind parked vehicle during pass maneuver.
+
+Red-light Running (scenario 5):
+- Crossing vehicle runs red while ego proceeds on green.
+- Traffic-light monitor forces ego green / adversary red; adversary still accelerates.
+
+Unprotected Left-turn (scenario 6):
+- Oncoming vehicle arrives during unprotected left turn.
+- Crossing pedestrian conflicts with left-turning ego.
+
+Right-turn (scenario 7):
+- Pedestrian on crosswalk during ego right turn.
+- Cyclist merges from right during turn.
+
+Crossing Negotiation (scenario 8):
+- Multiple agents negotiate ambiguous priority at complex intersection.

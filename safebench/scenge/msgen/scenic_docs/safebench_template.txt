@@ -1,0 +1,29 @@
+Safebench Scenic file boilerplate (always include):
+
+Town = globalParameters.town
+EgoSpawnPt = globalParameters.spawnPt
+yaw = globalParameters.yaw
+egoTrajectory = PolylineRegion(globalParameters.waypoints)
+param map = localPath(f'../maps/{Town}.xodr')
+param carla_map = Town
+model scenic.simulators.carla.model
+EGO_MODEL = "vehicle.lincoln.mkz_2017"
+
+ego = Car at EgoSpawnPt,
+    with heading yaw,
+    with regionContainedIn None,
+    with blueprint EGO_MODEL
+
+Optional for intersection routes:
+lanePts = globalParameters.lanePts
+
+Maps symlink: generated files live under scenic_data/scenario_k/ and resolve ../maps/{Town}.xodr relative to that folder.
+
+Adversarial actor naming convention:
+- Primary adversary variable: AdvAgent
+- Behavior block name: AdvBehavior()
+- Safebench records adversary as adv_agent_0 in trajectories
+
+Common require constraints:
+require (distance from AdvAgent to intersection) > 10
+require -160 deg <= RelativeHeading(AdvAgent) <= -20 deg

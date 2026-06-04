@@ -1,0 +1,23 @@
+OPT parameter naming conventions for ScenGE / Safebench:
+
+All optimizable values must use:
+param OPT_<NAME> = Range(min, max)
+and be read as globalParameters.OPT_<NAME> in behaviors and spawn logic.
+
+Common parameters:
+OPT_GEO_X_DISTANCE = Range(2, 8)          # lateral offset from anchor
+OPT_GEO_Y_DISTANCE = Range(15, 50)        # longitudinal offset along road
+OPT_GEO_BLOCKER_X_DISTANCE = Range(2, 8)  # occlusion object lateral
+OPT_GEO_BLOCKER_Y_DISTANCE = Range(15, 50)  # occlusion object longitudinal
+OPT_ADV_SPEED = Range(0, 5)               # pedestrian crossing speed
+OPT_ADV_DISTANCE = Range(0, 15)           # activation distance threshold
+OPT_STOP_DISTANCE = Range(0, 1)           # stop near ego trajectory
+OPT_BRAKE_DISTANCE = Range(0, 1)          # brake trigger distance
+OPT_BRAKE = Range(0, 1)                   # brake intensity
+OPT_ADV_DEGREE = Range(-90, 90)           # walking direction offset
+OPT_THROTTLE = Range(0.5, 1)              # vehicle throttle burst
+OPT_SPRINT_SPEED = Range(0, 10)           # fast emergence speed
+
+ScenicRunner train_scenario uses these ranges for online optimization (opt_step=10, select_num=2).
+
+Do not use bare constants for values that should be searchable during training.

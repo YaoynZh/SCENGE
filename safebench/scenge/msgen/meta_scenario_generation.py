@@ -11,8 +11,9 @@ from tqdm import tqdm
 
 # --- Core LlamaIndex Imports (Safe for older PyTorch) ---
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.llms.huggingface import HuggingFaceLLM
+
+PHASE1_REQUIRED_KEYS = ("Description", "AdvType", "AdvPos", "AdvBehavior")
+HEADER_LINE_RE = re.compile(r"^#\s*(Description|AdvType|AdvPos|AdvBehavior):")
 
 scenario_dict = {
     1: "Straight Obstacle",
@@ -36,6 +37,8 @@ Safebench 对齐要点（生成/修复时必须满足）：
 4) 可调超参：param OPT_xxx = Range(...) 并在逻辑中用 globalParameters.OPT_xxx 引用。
 5) 对抗行为名建议包含 Adv（如 AdvBehavior），便于 Safebench 侧识别 adversarial actor。
 6) ego 一般为 Car，with regionContainedIn None，with blueprint EGO_MODEL。
+7) 禁止 Vector(x,y,z) 与 EgoSpawnPt+Vector；spawn 必须用 OrientedPoint、left/right of、@ 偏移等 Safebench 写法。
+8) AdvAgent 必须 with behavior AdvBehavior()。
 """
 
 
@@ -64,7 +67,186 @@ def clean_qwq_output(text: str) -> str:
     """Helper function: remove QwQ's <redacted_thinking> tags"""
     if "</redacted_thinking>" in text:
         return text.split("</redacted_thinking>")[-1].strip()
-    return text
+    return text.strip()
+
+
+def configure_llm(
+    llm_backend: str,
+    llm_name: str,
+    *,
+    openai_api_key: Optional[str] = None,
+    openai_base_url: Optional[str] = None,
+    openai_temperature: float = 0.1,
+    openai_max_tokens: Optional[int] = None,
+) -> None:
+    """Configure ``Settings.llm`` for HuggingFace local or OpenAI-compatible APIs."""
+    backend = llm_backend.lower()
+    if backend == "openai":
+        from llama_index.llms.openai import OpenAI
+
+        api_key = openai_api_key or os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "OpenAI backend requires --openai-api-key or env OPENAI_API_KEY"
+            )
+        api_base = openai_base_url or os.environ.get("OPENAI_BASE_URL")
+        kwargs = {
+            "model": llm_name,
+            "api_key": api_key,
+            "temperature": openai_temperature,
+        }
+        if api_base:
+            kwargs["api_base"] = api_base
+        if openai_max_tokens is not None:
+            kwargs["max_tokens"] = openai_max_tokens
+        Settings.llm = OpenAI(**kwargs)
+        base_msg = api_base or "https://api.openai.com/v1"
+        print(f">> LLM backend: OpenAI API ({llm_name}, base={base_msg})")
+    elif backend in ("huggingface", "hf"):
+        from llama_index.llms.huggingface import HuggingFaceLLM
+
+        Settings.llm = HuggingFaceLLM(model_name=llm_name, tokenizer_name=llm_name)
+        print(f">> LLM backend: HuggingFace ({llm_name})")
+    else:
+        raise ValueError(
+            f"Unknown llm_backend={llm_backend!r}; use 'openai' or 'huggingface'"
+        )
+
+
+def configure_embed_model(
+    embed_backend: str,
+    embed_name: str,
+    *,
+    openai_api_key: Optional[str] = None,
+    openai_base_url: Optional[str] = None,
+) -> None:
+    """Configure ``Settings.embed_model`` for RAG retrieval."""
+    backend = embed_backend.lower()
+    if backend == "openai":
+        from llama_index.embeddings.openai import OpenAIEmbedding
+
+        api_key = openai_api_key or os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "OpenAI embed backend requires --openai-api-key or env OPENAI_API_KEY"
+            )
+        api_base = openai_base_url or os.environ.get("OPENAI_BASE_URL")
+        kwargs = {"model": embed_name, "api_key": api_key}
+        if api_base:
+            kwargs["api_base"] = api_base
+        Settings.embed_model = OpenAIEmbedding(**kwargs)
+        base_msg = api_base or "https://api.openai.com/v1"
+        print(f">> Embed backend: OpenAI API ({embed_name}, base={base_msg})")
+    elif backend in ("huggingface", "hf"):
+        from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
+        Settings.embed_model = HuggingFaceEmbedding(model_name=embed_name)
+        print(f">> Embed backend: HuggingFace ({embed_name})")
+    else:
+        raise ValueError(
+            f"Unknown embed_backend={embed_backend!r}; use 'openai' or 'huggingface'"
+        )
+
+
+def resolve_embed_backend(embed_backend: Optional[str], llm_backend: str) -> str:
+    if embed_backend:
+        return embed_backend
+    return "openai" if llm_backend.lower() == "openai" else "huggingface"
+
+
+def default_embed_name(embed_backend: str) -> str:
+    if embed_backend.lower() == "openai":
+        return "text-embedding-3-small"
+    return "../weights/bge-m3"
+
+def extract_text_block(text: str) -> str:
+    """Parse phase-1 structured fields from a ```Text``` block."""
+    text = clean_qwq_output(text)
+    patterns = [
+        r"```Text\s*(.*?)```",
+        r"```text\s*(.*?)```",
+    ]
+    for pat in patterns:
+        m = re.search(pat, text, re.DOTALL | re.IGNORECASE)
+        if m:
+            return m.group(1).strip()
+    raise ValueError("LLM 输出中未找到 ```Text ... ``` 代码块")
+
+
+def parse_phase1_dict(text: str) -> Dict[str, str]:
+    body = extract_text_block(text)
+    phase1_dict: Dict[str, str] = {}
+    for sentence in body.splitlines():
+        sentence = sentence.strip()
+        if not sentence or ": " not in sentence:
+            continue
+        key, value = sentence.split(": ", 1)
+        phase1_dict[key.strip()] = value.strip()
+    missing = [k for k in PHASE1_REQUIRED_KEYS if k not in phase1_dict]
+    if missing:
+        raise ValueError(f"phase-1 缺少字段: {missing}")
+    return phase1_dict
+
+
+def strip_scenic_header(text: str) -> str:
+    lines = []
+    for line in text.splitlines():
+        if HEADER_LINE_RE.match(line.strip()):
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
+def pick_template_name(scenario_id: int, adv_type: str) -> str:
+    adv = (adv_type or "").lower()
+    if scenario_id == 1 and adv in ("car", "vehicle", "truck", "bus"):
+        return "scenario_1_vehicle_cutin.scenic"
+    if scenario_id == 1:
+        return "scenario_1_pedestrian_cross.scenic"
+    return f"scenario_{scenario_id}_default.scenic"
+
+
+def load_scenic_template_body(scenario_id: int, adv_type: str) -> str:
+    msgen_root = _msgen_root()
+    repo_root = _repo_root()
+    name = pick_template_name(scenario_id, adv_type)
+    candidates = [
+        os.path.join(msgen_root, "scenic_templates", name),
+        os.path.join(
+            repo_root,
+            "safebench",
+            "scenario",
+            "scenario_data",
+            "scenic_data",
+            f"scenario_{scenario_id}_bak",
+            "behavior_1_opt.scenic",
+        ),
+        os.path.join(
+            repo_root,
+            "safebench",
+            "scenario",
+            "scenario_data",
+            "scenic_data",
+            f"scenario_{scenario_id}",
+            "behavior_1_opt.scenic",
+        ),
+        os.path.join(msgen_root, "scenic_templates", "scenario_1_pedestrian_cross.scenic"),
+    ]
+    for path in candidates:
+        if not os.path.isfile(path):
+            continue
+        with open(path, "r", encoding="utf-8") as fh:
+            return strip_scenic_header(fh.read())
+    raise FileNotFoundError(
+        f"找不到 scenario_{scenario_id} 的 Scenic 模板，请检查 scenic_templates/ 或 scenario_{scenario_id}_bak/"
+    )
+
+
+def build_scenic_from_template(
+    phase1_dict: Dict[str, str], scenario_id: int, adv_type: str
+) -> str:
+    body = load_scenic_template_body(scenario_id, adv_type)
+    return build_scenic_file_content(phase1_dict, body)
 
 
 def ensure_scenic_maps_symlink(work_dir: str, repo_root: str) -> None:
@@ -228,13 +410,14 @@ def extract_scenic_from_llm_output(text: str) -> str:
 
 
 def build_scenic_file_content(phase1_dict: Dict[str, str], phase2_body: str) -> str:
+    body = strip_scenic_header(phase2_body)
     return "\n".join(
         [
             f'# Description: {phase1_dict["Description"]}',
             f'# AdvType: {phase1_dict["AdvType"]}',
             f'# AdvPos: {phase1_dict["AdvPos"]}',
             f'# AdvBehavior: {phase1_dict["AdvBehavior"]}',
-            phase2_body.strip(),
+            body,
         ]
     )
 
@@ -253,9 +436,9 @@ def repair_scenic_with_llm(
 {validation_feedback}
 ---
 
-当前完整文件内容（保留头部 # 注释；请输出同样带注释的完整文件）：
+当前完整文件内容：
 ---
-{scenic_code}
+{strip_scenic_header(scenic_code)}
 ---
 
 场景语义字段（不要改事件含义，只修正语法、API、与 Safebench 约束）：
@@ -264,9 +447,16 @@ def repair_scenic_with_llm(
 - AdvPos: {phase1_dict.get("AdvPos", "")}
 - AdvBehavior: {phase1_dict.get("AdvBehavior", "")}
 
-只输出一个 Markdown 代码块，格式严格为：
+Spawn 示例（必须类似这种结构，不要自创语法）：
+IntSpawnPt = OrientedPoint following roadDirection from EgoSpawnPt for globalParameters.OPT_GEO_Y_DISTANCE
+AdvAgent = Car left of IntSpawnPt by globalParameters.OPT_GEO_X_DISTANCE,
+    with heading IntSpawnPt.heading,
+    with regionContainedIn None,
+    with behavior AdvBehavior()
+
+只输出 Scenic 源码 body（不要 # Description 等头部注释），格式严格为：
 ```Scenic
-（此处为完整 scenic 源码）
+（此处为完整 scenic 源码 body）
 ```
 """
     response = Settings.llm.complete(prompt)
@@ -284,6 +474,14 @@ def run(
     scenario_route_id: int = 1,
     route_pickle: Optional[str] = None,
     scenic_try_sample: bool = True,
+    llm_backend: str = "huggingface",
+    embed_backend: Optional[str] = None,
+    openai_api_key: Optional[str] = None,
+    openai_base_url: Optional[str] = None,
+    openai_temperature: float = 0.1,
+    openai_max_tokens: Optional[int] = None,
+    use_template_fallback: bool = True,
+    template_only: bool = False,
 ):
     repo_root = _repo_root()
     msgen_root = _msgen_root()
@@ -298,8 +496,25 @@ def run(
 
     ensure_scenic_maps_symlink(work_dir, repo_root)
 
-    Settings.llm = HuggingFaceLLM(model_name=llm_name, tokenizer_name=llm_name)
-    Settings.embed_model = HuggingFaceEmbedding(model_name=embed_name)
+    embed_backend = resolve_embed_backend(embed_backend, llm_backend)
+    if embed_name in ("../weights/bge-m3", "BAAI/bge-small-en-v1.5", "BAAI/bge-large-en-v1.5"):
+        if embed_backend == "openai":
+            embed_name = default_embed_name(embed_backend)
+
+    configure_llm(
+        llm_backend,
+        llm_name,
+        openai_api_key=openai_api_key,
+        openai_base_url=openai_base_url,
+        openai_temperature=openai_temperature,
+        openai_max_tokens=openai_max_tokens,
+    )
+    configure_embed_model(
+        embed_backend,
+        embed_name,
+        openai_api_key=openai_api_key,
+        openai_base_url=openai_base_url,
+    )
 
     print("加载RAG中...")
     phase1_docs = SimpleDirectoryReader(
@@ -344,17 +559,7 @@ def run(
                     phase1_output = phase1_query_engine.query(
                         phase1_prompt.format(base_scenario=scenario_dict[scenario_id])
                     ).response
-                    phase1_match = re.search(
-                        r"<redacted_thinking>(.*?)</redacted_thinking>(.*?)```Text(.*?)```",
-                        phase1_output,
-                        re.DOTALL,
-                    )
-                    phase1_output = phase1_match.group(3)
-                    phase1_dict = dict()
-                    for sentence in phase1_output.splitlines():
-                        if sentence:
-                            parts = sentence.split(": ")
-                            phase1_dict[parts[0]] = parts[1]
+                    phase1_dict = parse_phase1_dict(phase1_output)
                     break
                 except Exception as e:
                     pbar.set_postfix(
@@ -362,33 +567,39 @@ def run(
                     )
             pbar.set_postfix({})
 
-            while True:
-                try:
-                    pbar.set_description(
-                        f"第{idx + 1}个基础场景为：{scenario_dict[scenario_id]}, Generating Phase 2!"
-                    )
-                    phase2_output = phase2_query_engine.query(
-                        phase2_prompt.format(
-                            Description=f'[{phase1_dict["Description"]}]',
-                            AdvType=f'[{phase1_dict["AdvType"]}]',
-                            AdvPos=f'[{phase1_dict["AdvPos"]}]',
-                            AdvBehavior=f'[{phase1_dict["AdvBehavior"]}]',
+            if template_only:
+                scenic_code = build_scenic_from_template(
+                    phase1_dict,
+                    scenario_id,
+                    phase1_dict.get("AdvType", ""),
+                )
+                pbar.set_description(
+                    f"第{idx + 1}个基础场景为：{scenario_dict[scenario_id]}, 使用模板"
+                )
+            else:
+                while True:
+                    try:
+                        pbar.set_description(
+                            f"第{idx + 1}个基础场景为：{scenario_dict[scenario_id]}, Generating Phase 2!"
                         )
-                    ).response
-                    phase2_match = re.search(
-                        r"<redacted_thinking>(.*?)</redacted_thinking>(.*?)```Scenic(.*?)```",
-                        phase2_output,
-                        re.DOTALL,
-                    )
-                    phase2_output = phase2_match.group(3)
-                    break
-                except Exception as e:
-                    pbar.set_postfix(
-                        retry_reason=f"Error occurred in phase 2: {e}, retrying..."
-                    )
+                        phase2_output = phase2_query_engine.query(
+                            phase2_prompt.format(
+                                Description=f'[{phase1_dict["Description"]}]',
+                                AdvType=f'[{phase1_dict["AdvType"]}]',
+                                AdvPos=f'[{phase1_dict["AdvPos"]}]',
+                                AdvBehavior=f'[{phase1_dict["AdvBehavior"]}]',
+                            )
+                        ).response
+                        phase2_output = extract_scenic_from_llm_output(
+                            clean_qwq_output(phase2_output)
+                        )
+                        break
+                    except Exception as e:
+                        pbar.set_postfix(
+                            retry_reason=f"Error occurred in phase 2: {e}, retrying..."
+                        )
+                scenic_code = build_scenic_file_content(phase1_dict, phase2_output)
             pbar.set_postfix({})
-
-            scenic_code = build_scenic_file_content(phase1_dict, phase2_output)
             file_path = os.path.join(
                 scenario_dir, f"behavior_{scenario_idx}_opt.scenic"
             )
@@ -403,6 +614,7 @@ def run(
             # attempt = 已执行的 LLM 纠错次数；每次先写盘再校验，失败则最多再调用 max_repair_rounds 次 repair LLM
             repair_attempt = 0
             last_feedback = ""
+            used_template_fallback = template_only
             while True:
                 with open(file_path, "w", encoding="utf-8") as file:
                     file.write(scenic_code)
@@ -411,23 +623,57 @@ def run(
                     file_path,
                     params,
                     model=DEFAULT_SCENIC_MODEL,
-                    try_sample_scene=scenic_try_sample,
+                    try_sample_scene=scenic_try_sample and not used_template_fallback,
                 )
                 if ok:
-                    pbar.set_postfix(
-                        scenic_ok=(
-                            f"ok (llm_repairs={repair_attempt})"
-                            if repair_attempt
-                            else "ok"
+                    tag = "ok"
+                    if repair_attempt:
+                        tag = f"ok (llm_repairs={repair_attempt})"
+                    if used_template_fallback:
+                        tag += ", template"
+                    pbar.set_postfix(scenic_ok=tag)
+                    break
+
+                if used_template_fallback:
+                    ok_compile, compile_feedback = validate_scenic_for_safebench(
+                        file_path,
+                        params,
+                        model=DEFAULT_SCENIC_MODEL,
+                        try_sample_scene=False,
+                    )
+                    if ok_compile:
+                        print(
+                            f"\n[info] {file_path} 模板 compile 通过"
+                            + ("（sample 未通过，仍可使用）" if scenic_try_sample else "")
                         )
+                        pbar.set_postfix(scenic_ok="ok, template, compile_only")
+                        break
+                    last_feedback = compile_feedback
+
+                if repair_attempt >= max_repair_rounds:
+                    if use_template_fallback and not used_template_fallback:
+                        print(
+                            f"\n[info] {file_path} LLM 未通过校验，改用内置 Scenic 模板。"
+                        )
+                        scenic_code = build_scenic_from_template(
+                            phase1_dict,
+                            scenario_id,
+                            phase1_dict.get("AdvType", ""),
+                        )
+                        used_template_fallback = True
+                        repair_attempt = max_repair_rounds
+                        pbar.set_description(
+                            f"第{idx + 1}个场景 模板校验"
+                        )
+                        continue
+
+                    print(
+                        f"\n[warn] {file_path} 校验失败，已保存最后一次版本。\n"
+                        f"{last_feedback[:2000]}"
                     )
                     break
 
-                if repair_attempt >= max_repair_rounds:
-                    print(
-                        f"\n[warn] {file_path} 在 {max_repair_rounds} 次 LLM 纠错后仍失败，已保存最后一次版本。\n"
-                        f"{last_feedback[:2000]}"
-                    )
+                if used_template_fallback:
                     break
 
                 repair_attempt += 1
@@ -446,8 +692,58 @@ def run(
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-l", "--llm_name", type=str, default="../weights/QwQ-32B")
-    parser.add_argument("-e", "--embed_name", type=str, default="../weights/bge-m3")
+    parser.add_argument(
+        "--llm-backend",
+        type=str,
+        choices=("huggingface", "hf", "openai"),
+        default="huggingface",
+        help="LLM provider: local HuggingFace weights or OpenAI-compatible API.",
+    )
+    parser.add_argument(
+        "-l",
+        "--llm_name",
+        type=str,
+        default="../weights/QwQ-32B",
+        help="HuggingFace model path/name, or OpenAI model id (e.g. gpt-4o-mini).",
+    )
+    parser.add_argument(
+        "--openai-api-key",
+        type=str,
+        default=None,
+        help="OpenAI API key (fallback: env OPENAI_API_KEY).",
+    )
+    parser.add_argument(
+        "--openai-base-url",
+        type=str,
+        default=None,
+        help="OpenAI-compatible base URL (fallback: env OPENAI_BASE_URL).",
+    )
+    parser.add_argument(
+        "--openai-temperature",
+        type=float,
+        default=0.1,
+        help="Sampling temperature for OpenAI backend.",
+    )
+    parser.add_argument(
+        "--openai-max-tokens",
+        type=int,
+        default=None,
+        help="Optional max tokens for OpenAI backend.",
+    )
+    parser.add_argument(
+        "--embed-backend",
+        type=str,
+        choices=("huggingface", "hf", "openai"),
+        default=None,
+        help="RAG embedding provider. Defaults to openai when --llm-backend=openai.",
+    )
+    parser.add_argument(
+        "-e",
+        "--embed_name",
+        type=str,
+        default=None,
+        help="Embedding model: HF repo/path or OpenAI model (default: text-embedding-3-small / ../weights/bge-m3).",
+    )
     parser.add_argument(
         "-id",
         "--scenario_ids",
@@ -478,17 +774,37 @@ def parse_opt():
         action="store_true",
         help="仅做 scenarioFromFile，不调用 scenario.generate（更快但更接近你原先的弱校验）。",
     )
+    parser.add_argument(
+        "--template-only",
+        action="store_true",
+        help="跳过 LLM Scenic 生成，仅用 Phase1 语义 + 内置模板。",
+    )
+    parser.add_argument(
+        "--no-template-fallback",
+        action="store_true",
+        help="LLM 失败时不回退到内置/仓库 Scenic 模板。",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     opt = parse_opt()
+    embed_backend = resolve_embed_backend(opt.embed_backend, opt.llm_backend)
+    embed_name = opt.embed_name or default_embed_name(embed_backend)
     run(
         llm_name=opt.llm_name,
-        embed_name=opt.embed_name,
+        embed_name=embed_name,
         scenario_ids=opt.scenario_ids,
         max_repair_rounds=opt.max_repair_rounds,
         scenario_route_id=opt.scenario_route_id,
         route_pickle=opt.route_pickle,
         scenic_try_sample=not opt.no_scenic_sample,
+        llm_backend=opt.llm_backend,
+        embed_backend=opt.embed_backend,
+        openai_api_key=opt.openai_api_key,
+        openai_base_url=opt.openai_base_url,
+        openai_temperature=opt.openai_temperature,
+        openai_max_tokens=opt.openai_max_tokens,
+        use_template_fallback=not opt.no_template_fallback,
+        template_only=opt.template_only,
     )

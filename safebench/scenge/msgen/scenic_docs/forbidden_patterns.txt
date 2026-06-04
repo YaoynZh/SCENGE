@@ -1,0 +1,18 @@
+DO NOT use these patterns in Safebench Scenic scripts (they fail compile):
+
+WRONG: AdvAgent = Car at (EgoSpawnPt + Vector(-10, 0, 0))
+WRONG: Vector(-10, 0, 0) or Vector(x, y, z) with three components
+WRONG: adding OrientedPoint/Vector directly to EgoSpawnPt with + operator
+
+Scenic Vector in this codebase is 2D (x, y) only. Never pass a z component.
+
+CORRECT spawn patterns instead:
+- IntSpawnPt = OrientedPoint following roadDirection from EgoSpawnPt for globalParameters.OPT_GEO_Y_DISTANCE
+- AdvAgent = Car left of IntSpawnPt by globalParameters.OPT_GEO_X_DISTANCE, ...
+- AdvAgent = Car right of IntSpawnPt by globalParameters.OPT_GEO_X_DISTANCE, ...
+- SHIFT = globalParameters.OPT_GEO_X_DISTANCE @ globalParameters.OPT_GEO_Y_DISTANCE
+- AdvAgent = Car at Blocker offset along IntSpawnPt.heading by SHIFT, ...
+
+Always attach: with behavior AdvBehavior()
+Always use: with heading IntSpawnPt.heading (or +/- 90 deg for crossing)
+Always use: with regionContainedIn None

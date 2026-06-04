@@ -1,0 +1,30 @@
+Phase-1 structured extraction format for msgen:
+
+The LLM must emit four keys in a ```Text``` block:
+
+Description: <full natural-language scenario>
+AdvType: <agent category>
+AdvPos: <relative spawn / approach direction>
+AdvBehavior: <short adversarial maneuver phrase>
+
+Parsing rule used by the pipeline:
+- Each non-empty line is split on the first ": " into key and value.
+- Required keys: Description, AdvType, AdvPos, AdvBehavior.
+
+Good example (Straight Obstacle):
+Description: The ego vehicle is driving on a straight road; the adversarial pedestrian suddenly crosses from the right front and stops in front of the ego.
+AdvType: pedestrian
+AdvPos: right front
+AdvBehavior: Crosses unexpectedly and freezes in the ego path
+
+Good example (Turning Obstacle):
+Description: The ego vehicle is turning left at an intersection; a motorcyclist on the right front feints crossing then brakes at the road edge.
+AdvType: motorcycle
+AdvPos: right front
+AdvBehavior: Feints crossing then brakes abruptly at road edge
+
+Bad outputs to avoid:
+- Missing any of the four keys
+- Multi-line values for a single key
+- Scenic code in phase 1
+- Chinese text (use English for compatibility with embedding retrieval)

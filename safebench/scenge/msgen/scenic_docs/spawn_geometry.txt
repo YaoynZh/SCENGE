@@ -1,0 +1,40 @@
+Spawn geometry snippets for straight-road scenarios:
+
+Forward anchor along ego lane:
+IntSpawnPt = OrientedPoint following roadDirection from EgoSpawnPt for globalParameters.OPT_GEO_Y_DISTANCE
+
+Pedestrian on right side of road:
+AdvAgent = Pedestrian right of IntSpawnPt by globalParameters.OPT_GEO_X_DISTANCE,
+    with heading IntSpawnPt.heading + 90 deg,
+    with regionContainedIn None,
+    with behavior AdvBehavior()
+
+Pedestrian on left side:
+AdvAgent = Pedestrian left of IntSpawnPt by globalParameters.OPT_GEO_X_DISTANCE,
+    with heading IntSpawnPt.heading - 90 deg,
+    with regionContainedIn None,
+    with behavior AdvBehavior()
+
+param OPT_GEO_X_DISTANCE = Range(2, 8)
+param OPT_GEO_Y_DISTANCE = Range(15, 50)
+
+Occlusion with bus stop blocker:
+IntSpawnPt = OrientedPoint following roadDirection from EgoSpawnPt for globalParameters.OPT_GEO_BLOCKER_Y_DISTANCE
+Blocker = BusStop right of IntSpawnPt by globalParameters.OPT_GEO_BLOCKER_X_DISTANCE,
+    with heading IntSpawnPt.heading,
+    with regionContainedIn None
+SHIFT = globalParameters.OPT_GEO_X_DISTANCE @ globalParameters.OPT_GEO_Y_DISTANCE
+AdvAgent = Pedestrian at Blocker offset along IntSpawnPt.heading by SHIFT,
+    with heading IntSpawnPt.heading + 90 deg,
+    with regionContainedIn None,
+    with behavior AdvBehavior()
+
+Occlusion with parked car blocker:
+Blocker = Car right of IntSpawnPt by globalParameters.OPT_GEO_BLOCKER_X_DISTANCE,
+    with heading IntSpawnPt.heading,
+    with regionContainedIn None,
+    with blueprint BLOCKER_MODEL
+
+Offset spawn using @ operator:
+SHIFT = globalParameters.OPT_GEO_X_DISTANCE @ globalParameters.OPT_GEO_Y_DISTANCE
+AdvAgent = Pedestrian at Blocker offset along IntSpawnPt.heading by SHIFT, ...

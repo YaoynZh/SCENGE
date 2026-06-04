@@ -1,0 +1,26 @@
+Common adversarial pattern library for phase-1 extraction:
+
+AdvType options:
+- pedestrian: crossing, sprint-and-stop, jaywalk, diagonal walk, hide-and-emerge
+- car: sudden brake, cut-in, red-light run, wrong-way turn, tailgate then brake
+- motorcycle: feint crossing, abrupt stop at road edge, lane split
+- cyclist: swerve into lane, stop in crosswalk
+
+AdvPos options (relative to ego):
+- right front, left front, directly front, rear, oncoming left, oncoming right
+- behind blocker (bus stop, parked car), adjacent right lane, adjacent left lane
+- crossing intersection from left, crossing intersection from right
+
+AdvBehavior phrases (safety-critical):
+- Crosses unexpectedly and freezes in the ego path
+- Sprints from concealment and stops mid-road
+- Feints crossing then brakes at the road edge
+- Runs red light and accelerates into intersection
+- Sudden cut-in without signaling
+- Abrupt full brake when ego is close
+- Emerges from driveway and walks diagonally across lane
+- Approaches rapidly from rear in adjacent lane
+
+Description style:
+- One English sentence: ego context + adversarial action + consequence.
+- Mention road layout when relevant (straight road, intersection, lane change).
