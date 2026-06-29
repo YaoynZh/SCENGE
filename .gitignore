@@ -1,6 +1,116 @@
-CARLA_0.9.13_safebench/
-log/
+# OS / editor
 .DS_Store
-*.egg-info
-*.pyc
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+conda-env/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!.env.template
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+secrets/
+secret/
+credentials/
+*.secret
+*credentials*.json
+*credential*.json
+
+# Logs and experiment outputs
+log/
+logs/
+*.log
+*.out
+*.err
+runs/
+wandb/
+mlruns/
+outputs/
+results/
+checkpoints/
+tensorboard/
+**/tb/
+events.out.tfevents.*
+
+# User uploads / generated media
+uploads/
+upload/
+user_uploads/
+media/uploads/
+static/uploads/
+
+# Caches and temporary files
+.cache/
+cache/
+tmp/
+temp/
+*.tmp
+
+# Local simulator/runtime distributions
+CARLA_0.9.13_safebench/
+
+# Datasets and local data drops.
+# Keep only lightweight docs/placeholders by default.
+data/**
+!data/
+!data/**/
+!data/**/README*
+!data/**/.gitkeep
+models/**
+!models/
+!models/**/
+!models/**/README*
+!models/**/.gitkeep
+
+# Model weights and checkpoints
+weights/*
+!weights/README*
+!weights/.gitkeep
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.bin
+*.torch
+*.tflite
+*.joblib
+
+# Pickle files are often generated datasets, caches, or checkpoints.
+*.pkl
+*.pickle
+
+# Keep project scenario definitions/configs trackable, but ignore model
+# checkpoints under safebench scenario data.
+safebench/agent/model_ckpt/
+safebench/scenario/scenario_data/model_ckpt/
